@@ -1,4 +1,5 @@
 #![allow(unused_must_use)]
+#![allow(non_snake_case)]
 
 extern crate gpgme;
 extern crate getopts;
@@ -18,7 +19,7 @@ use gpgme::ops;
 use rustc_serialize::json;
 
 #[derive(RustcDecodable, RustcEncodable)]
-struct UnPwCombo{
+pub struct UnPwCombo{
     domain : String,
     password : String
 }
@@ -93,7 +94,7 @@ fn decrypt_data (ctx: &mut gpgme::Context, input: &mut Data, decrypted: &mut Dat
     }
 }
 
-fn find_key_in_unpwcombo_vec(vec: &Vec<UnPwCombo>, searchstr : &str) -> String {
+pub fn find_key_in_unpwcombo_vec(vec: &Vec<UnPwCombo>, searchstr : &str) -> String {
     for combo in vec {
         if combo.domain == searchstr {
             let x = &combo.password;
@@ -178,5 +179,23 @@ fn main() {
         save_updated_pw_file(&combos, &path, &mut ctx, &recipient);
         println!("Password Stored");
         exit(0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn needle_in_haystack() {
+        let tuples = [("domain.comisthis", "notthisdomain"), ("uisce.ie", "iamapassword"), ("domain.com", "domain!"), ("whatsapassword.io", "omg")];
+        let searchdomain = "domain.com";
+        let correctanswer = "domain!";
+
+        let mut combos: Vec<UnPwCombo> = Vec::new();
+        for combo in tuples.iter() {
+            combos.push(UnPwCombo::new(combo.0, combo.1));
+        }
+
+        assert_eq!(find_key_in_unpwcombo_vec(&combos, searchdomain), correctanswer);
     }
 }
