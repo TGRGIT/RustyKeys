@@ -1,4 +1,7 @@
 language: rust
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -y libxml2-dev libgpg-error-dev libgpgme11 gpgv libgpgme11-dev libgpg-error0
 rust:
   - stable
   - beta
