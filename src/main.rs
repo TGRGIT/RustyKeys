@@ -1,10 +1,8 @@
 #![allow(unused_must_use)]
-#![allow(unused_variables)]
 
 extern crate gpgme;
 extern crate getopts;
-extern crate serde;
-extern crate serde_json;
+extern crate rustc_serialize;
 
 use std::env;
 use std::io;
@@ -17,8 +15,9 @@ use getopts::Options;
 use getopts::Matches;
 use gpgme::Data;
 use gpgme::ops;
-use serde_json::Value;
+use rustc_serialize::json;
 
+#[derive(RustcDecodable, RustcEncodable)]
 struct UnPwCombo{
     domain : String,
     password : String
@@ -30,10 +29,6 @@ impl UnPwCombo {
             domain: domain.to_string(),
             password: password.to_string()
         }
-    }
-
-    fn get_json_str(&self) -> String {
-        return format!("\"{}\": \"{}\"", self.domain, self.password);
     }
 }
 
@@ -98,23 +93,6 @@ fn decrypt_data (ctx: &mut gpgme::Context, input: &mut Data, decrypted: &mut Dat
     }
 }
 
-
-fn gen_json_from_vec(vec: &Vec<UnPwCombo>) -> String {
-    let start_json_str = "{";
-    let end_json_str = "}";
-    let mut json_str = "".to_string();
-
-    for combo in vec {
-        if json_str == "" {
-            json_str = combo.get_json_str();
-        }else{
-            json_str = format!("{},{}", &json_str, &combo.get_json_str()); 
-        }
-    } 
-
-    return start_json_str.to_string() + &json_str + &end_json_str;
-}
-
 fn find_key_in_unpwcombo_vec(vec: &Vec<UnPwCombo>, searchstr : &str) -> String {
     for combo in vec {
         if combo.domain == searchstr {
@@ -134,7 +112,9 @@ fn save_updated_pw_file(vec: &Vec<UnPwCombo>, path : &str, ctx: &mut gpgme::Cont
 
     ctx.set_armor(true);
 
-    let output = gen_json_from_vec(&vec).into_bytes();
+    let serialized_vector = json::encode(&vec).unwrap();
+
+    let output = serialized_vector.into_bytes();
     let mut output_data = Data::from_bytes(&output).unwrap();
 
     match ctx.encrypt(Some(&key), ops::EncryptFlags::empty(), &mut output_data, &mut encrypted) {
@@ -178,16 +158,7 @@ fn main() {
     // Decrypt & Get JSON
     decrypt_data(&mut ctx, &mut input, &mut decrypted);
     let decrypted_string = decrypted.into_string().unwrap();
-    let json: Value = serde_json::from_str(&decrypted_string).unwrap();
-
-    // Lets get our kvps in order
-    let mut combos = Vec::new();
-    let json_obj = json.as_object().unwrap();
-
-    for (key, value) in json_obj.iter() {
-        let combo = UnPwCombo::new(&key, &value.as_string().unwrap());
-        combos.push(combo);
-    }
+    let mut combos: Vec<UnPwCombo> = json::decode(&decrypted_string).unwrap();
 
     // If requested, find matching password for a given key
     if opts.opt_present("f") {
