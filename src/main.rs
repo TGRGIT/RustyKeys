@@ -21,13 +21,15 @@ use rustc_serialize::json;
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct UnPwCombo{
     domain : String,
-    password : String
+    password : String,
+    username : String
 }
 
 impl UnPwCombo {
-    fn new(domain: &str, password: &str) -> UnPwCombo {
+    fn new(domain: &str, username: &str, password: &str) -> UnPwCombo {
         UnPwCombo {
             domain: domain.to_string(),
+            username: username.to_string(),
             password: password.to_string()
         }
     }
@@ -45,11 +47,13 @@ fn process_opts() -> Matches {
     let mut opts = Options::new();
     opts.optflag("h", "help", "display this help message");
     opts.optflag("i", "", "First time init");
+    opts.optflag("b", "", "Also print username in style username:password");
     opts.optopt("f", "", "Lookup password matching this string", "DOMAIN");
     opts.optopt("d", "", "Save new password - The domain of the password to save", "DOMAIN");
     opts.optopt("p", "", "The password to save", "Password");
     opts.optopt("l", "", "The location of the encrypted password file", "PATH");
     opts.optopt("r", "", "The recipient", "RECIPIENT");
+    opts.optopt("u", "", "The Username", "USERNAME");
     
     // Validate options
     let matches = match opts.parse(&args[1..]) {
@@ -94,11 +98,10 @@ fn decrypt_data (ctx: &mut gpgme::Context, input: &mut Data, decrypted: &mut Dat
     }
 }
 
-pub fn find_key_in_unpwcombo_vec(vec: &Vec<UnPwCombo>, searchstr : &str) -> String {
+pub fn find_key_in_unpwcombo_vec(vec: &Vec<UnPwCombo>, searchstr : &str) -> UnPwCombo {
     for combo in vec {
         if combo.domain == searchstr {
-            let x = &combo.password;
-            return x.to_string();
+            return UnPwCombo::new(&combo.domain, &combo.username,&combo.password);
         }
     } 
 
@@ -163,16 +166,26 @@ fn main() {
 
     // If requested, find matching password for a given key
     if opts.opt_present("f") {
-        let pw = find_key_in_unpwcombo_vec(&combos, &opts.opt_str("f").unwrap());
-        println!("{}", &pw);
-        exit(0);
+        let combo = find_key_in_unpwcombo_vec(&combos, &opts.opt_str("f").unwrap());
+        
+        if opts.opt_present("b"){
+            println!("{}:{}", &combo.username, &combo.password)
+        }else{
+            println!("{}", &combo.password);
+        }
     }
 
     // If requested, writeout updated file
     if opts.opt_present("d") {
         let domain = opts.opt_str("d").unwrap();
         let pw = opts.opt_str("p").unwrap();
-        let combo = UnPwCombo::new(&domain, &pw);
+        let mut un = "".to_string();
+        
+        if opts.opt_present("u") {
+            un = opts.opt_str("u").unwrap();
+        }
+        
+        let combo = UnPwCombo::new(&domain, &un, &pw);
         let recipient = opts.opt_str("r").unwrap();
 
         combos.push(combo);
@@ -190,12 +203,13 @@ mod tests {
         let tuples = [("domain.comisthis", "notthisdomain"), ("uisce.ie", "iamapassword"), ("domain.com", "domain!"), ("whatsapassword.io", "omg")];
         let searchdomain = "domain.com";
         let correctanswer = "domain!";
+        let username = "Thor";
 
         let mut combos: Vec<UnPwCombo> = Vec::new();
         for combo in tuples.iter() {
-            combos.push(UnPwCombo::new(combo.0, combo.1));
+            combos.push(UnPwCombo::new(combo.0, username,combo.1));
         }
 
-        assert_eq!(find_key_in_unpwcombo_vec(&combos, searchdomain), correctanswer);
+        assert_eq!(find_key_in_unpwcombo_vec(&combos, searchdomain).password, correctanswer);
     }
 }

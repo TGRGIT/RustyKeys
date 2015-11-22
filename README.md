@@ -1,9 +1,6 @@
 # RustyKeys
-
-**WIP : not for production use**
-
-## Build Status
 [![Build Status](https://travis-ci.org/TGRGIT/RustyKeys.svg?branch=master)](https://travis-ci.org/TGRGIT/RustyKeys)
+**WIP : not for production use**
 
 ## What is RustyKeys?
 RustyKeys is a GPGme based password manager written in rust
@@ -26,7 +23,7 @@ Almost entirely insecure, please do not use to store secure information currentl
 
 ## Usage
 1. pwm -i -l "/home/user/.pstore.asc" -r "user@domain.com"
-2. pwm -l "/home/user/.pstore.asc" -r "user@domain.com" -d domain.ie -p uiscebeatha
+2. pwm -l "/home/user/.pstore.asc" -r "user@domain.com" -d domain.ie -p uiscebeatha -u myusername
 3. pwm -l "/home/user/.pstore.asc" -f domain.ie
 
 ## Notes
