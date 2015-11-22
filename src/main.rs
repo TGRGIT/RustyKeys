@@ -19,10 +19,10 @@ use gpgme::ops;
 use rustc_serialize::json;
 
 #[derive(RustcDecodable, RustcEncodable)]
-pub struct UnPwCombo{
-    domain : String,
-    password : String,
-    username : String
+pub struct UnPwCombo {
+    domain: String,
+    password: String,
+    username: String,
 }
 
 impl UnPwCombo {
@@ -30,7 +30,7 @@ impl UnPwCombo {
         UnPwCombo {
             domain: domain.to_string(),
             username: username.to_string(),
-            password: password.to_string()
+            password: password.to_string(),
         }
     }
 }
@@ -40,6 +40,7 @@ fn print_usage(program: &str, opts: &Options) {
     write!(io::stderr(), "{}", opts.usage(&brief));
 }
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 fn process_opts() -> Matches {
     let args: Vec<_> = env::args().collect();
     let program = args[0].clone();
@@ -54,8 +55,8 @@ fn process_opts() -> Matches {
     opts.optopt("l", "", "The location of the encrypted password file", "PATH");
     opts.optopt("r", "", "The recipient", "RECIPIENT");
     opts.optopt("u", "", "The Username", "USERNAME");
-    
-    // Validate options
+
+// Validate options
     let matches = match opts.parse(&args[1..]) {
         Ok(matches) => matches,
         Err(fail) => {
@@ -65,7 +66,7 @@ fn process_opts() -> Matches {
         }
     };
 
-    // Print Help Message
+// Print Help Message
     if matches.opt_present("h") {
         print_usage(&program, &opts);
         exit(1);
@@ -85,11 +86,11 @@ fn load_encrypted_file(path: &str) -> Data {
             writeln!(io::stderr(), "pwm: error reading '{}': {}", path, err);
             exit(1);
         }
-    } 
+    }
 }
 
-fn decrypt_data (ctx: &mut gpgme::Context, input: &mut Data, decrypted: &mut Data){
-    match ctx.decrypt(input, decrypted){
+fn decrypt_data(ctx: &mut gpgme::Context, input: &mut Data, decrypted: &mut Data) {
+    match ctx.decrypt(input, decrypted) {
         Ok(_) => (),
         Err(err) => {
             writeln!(io::stderr(), "pwm: decrypting failed: {}", err);
@@ -98,18 +99,21 @@ fn decrypt_data (ctx: &mut gpgme::Context, input: &mut Data, decrypted: &mut Dat
     }
 }
 
-pub fn find_key_in_unpwcombo_vec(vec: &Vec<UnPwCombo>, searchstr : &str) -> UnPwCombo {
+pub fn find_key_in_unpwcombo_vec(vec: &Vec<UnPwCombo>, searchstr: &str) -> UnPwCombo {
     for combo in vec {
         if combo.domain == searchstr {
-            return UnPwCombo::new(&combo.domain, &combo.username,&combo.password);
+            return UnPwCombo::new(&combo.domain, &combo.username, &combo.password);
         }
-    } 
+    }
 
     writeln!(io::stderr(), "pwm: No such password");
     exit(1);
 }
 
-fn save_updated_pw_file(vec: &Vec<UnPwCombo>, path : &str, ctx: &mut gpgme::Context, recipient: &str) {
+fn save_updated_pw_file(vec: &Vec<UnPwCombo>,
+                        path: &str,
+                        ctx: &mut gpgme::Context,
+                        recipient: &str) {
     let key = ctx.find_key(recipient).unwrap();
 
     let mut encrypted = Data::new().unwrap();
@@ -121,7 +125,10 @@ fn save_updated_pw_file(vec: &Vec<UnPwCombo>, path : &str, ctx: &mut gpgme::Cont
     let output = serialized_vector.into_bytes();
     let mut output_data = Data::from_bytes(&output).unwrap();
 
-    match ctx.encrypt(Some(&key), ops::EncryptFlags::empty(), &mut output_data, &mut encrypted) {
+    match ctx.encrypt(Some(&key),
+                      ops::EncryptFlags::empty(),
+                      &mut output_data,
+                      &mut encrypted) {
         Ok(..) => (),
         Err(err) => {
             writeln!(io::stderr(), "encrypting failed: {}", err);
@@ -146,7 +153,7 @@ fn main() {
     let mut ctx = gpgme::create_context().unwrap();
     ctx.set_protocol(proto).unwrap();
 
-    // Run first time init 
+    // Run first time init
     if opts.opt_present("i") {
         let recipient = opts.opt_str("r").unwrap();
         let combos = Vec::new();
@@ -167,10 +174,10 @@ fn main() {
     // If requested, find matching password for a given key
     if opts.opt_present("f") {
         let combo = find_key_in_unpwcombo_vec(&combos, &opts.opt_str("f").unwrap());
-        
-        if opts.opt_present("b"){
+
+        if opts.opt_present("b") {
             println!("{}:{}", &combo.username, &combo.password)
-        }else{
+        } else {
             println!("{}", &combo.password);
         }
     }
@@ -180,11 +187,11 @@ fn main() {
         let domain = opts.opt_str("d").unwrap();
         let pw = opts.opt_str("p").unwrap();
         let mut un = "".to_string();
-        
+
         if opts.opt_present("u") {
             un = opts.opt_str("u").unwrap();
         }
-        
+
         let combo = UnPwCombo::new(&domain, &un, &pw);
         let recipient = opts.opt_str("r").unwrap();
 
@@ -200,16 +207,21 @@ mod tests {
     use super::*;
     #[test]
     fn needle_in_haystack() {
-        let tuples = [("domain.comisthis", "notthisdomain"), ("uisce.ie", "iamapassword"), ("domain.com", "domain!"), ("whatsapassword.io", "omg")];
+        let tuples = [("domain.comisthis", "notthisdomain"),
+                      ("uisce.ie", "iamapassword"),
+                      ("domain.com", "domain!"),
+                      ("whatsapassword.io", "omg")];
+
         let searchdomain = "domain.com";
         let correctanswer = "domain!";
         let username = "Thor";
 
         let mut combos: Vec<UnPwCombo> = Vec::new();
         for combo in tuples.iter() {
-            combos.push(UnPwCombo::new(combo.0, username,combo.1));
+            combos.push(UnPwCombo::new(combo.0, username, combo.1));
         }
 
-        assert_eq!(find_key_in_unpwcombo_vec(&combos, searchdomain).password, correctanswer);
+        assert_eq!(find_key_in_unpwcombo_vec(&combos, searchdomain).password,
+                   correctanswer);
     }
 }
