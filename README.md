@@ -7,7 +7,7 @@ RustyKeys is a GPGme based password manager written in rust
 
 
 ## How Secure is it 
-Almost entirely insecure, please do not use to store secure information currently.
+Prabably better than keeping passwords in a text file, but not entirely secure
 
 
 ## Deps
@@ -20,11 +20,7 @@ Almost entirely insecure, please do not use to store secure information currentl
 1. cargo build
 
 
-
 ## Usage
 1. pwm -i -l "/home/user/.pstore.asc" -r "user@domain.com"
-2. pwm -l "/home/user/.pstore.asc" -r "user@domain.com" -d domain.ie -p uiscebeatha -u myusername
-3. pwm -l "/home/user/.pstore.asc" -f domain.ie
-
-## Notes
-Intention is for use with pwgen and xclip, and eventually to incorporate all of these into one.
+2. pwm -l "/home/user/.pstore.asc" -r "user@domain.com" -d domain.ie -u myusername
+3. pwm -l "/home/user/.pstore.asc" -r "user@domain.com" -f domain.ie

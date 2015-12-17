@@ -4,6 +4,7 @@
 extern crate gpgme;
 extern crate getopts;
 extern crate rustc_serialize;
+extern crate rpassword;
 
 mod vault;
 
@@ -14,6 +15,7 @@ use std::process::exit;
 
 use getopts::Options;
 use getopts::Matches;
+use rpassword::read_password;
 
 use vault::Credential;
 
@@ -30,10 +32,10 @@ fn process_opts() -> Matches {
     let mut opts = Options::new();
     opts.optflag("h", "help", "display this help message");
     opts.optflag("i", "", "First time init");
-    opts.optflag("b", "", "Also print username in style username:password");
+    opts.optflag("b", "", "For Search - Also print username in style username:password");
+    opts.optflag("p", "", "Use Randomly generated password");
     opts.optopt("f", "", "Lookup password matching this string", "DOMAIN");
     opts.optopt("d", "", "Save new password - The domain of the password to save", "DOMAIN");
-    opts.optopt("p", "", "The password to save", "Password");
     opts.optopt("l", "", "The location of the encrypted password file", "PATH");
     opts.optopt("r", "", "The recipient", "RECIPIENT");
     opts.optopt("u", "", "The Username", "USERNAME");
@@ -98,7 +100,13 @@ fn main() {
     // If requested, writeout updated file
     if opts.opt_present("d") {
         let domain = opts.opt_str("d").unwrap();
-        let pw = opts.opt_str("p").unwrap();
+        let pw : String;
+        if opts.opt_present("p") {
+            pw = vault::gen_random_password();
+        }else{
+            println!("Enter Secret Pasword Now;");
+            pw = read_password().unwrap();   
+        }
         let mut un = "".to_string();
 
         if opts.opt_present("u") {
@@ -110,7 +118,11 @@ fn main() {
 
         credentials.push(credential);
         vault::save_updated_pw_file(&credentials, &path, &mut ctx, &recipient);
-        println!("Credential Stored");
+        if opts.opt_present("p") {
+            println!("{}", pw);
+        }else{
+            println!("Credential Stored");
+        }
         exit(0);
     }
 }

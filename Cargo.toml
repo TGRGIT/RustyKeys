@@ -7,3 +7,5 @@ authors = ["Fergus Cooney <fergus@cooney.be>"]
 gpgme = "*"
 getopts = "*"
 rustc-serialize = "*"
+rand = "0.3"
+rpassword = "0.1"

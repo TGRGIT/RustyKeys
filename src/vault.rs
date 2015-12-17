@@ -1,4 +1,6 @@
 extern crate gpgme;
+extern crate rand;
+
 
 use std::fs::File;
 use std::io;
@@ -6,10 +8,11 @@ use std::io::prelude::*;
 use std::process::exit;
 use std::path::Path;
 
-
-use rustc_serialize::json;
 use gpgme::Data;
 use gpgme::ops;
+use rustc_serialize::json;
+
+use self::rand::Rng;
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct Credential {
@@ -114,6 +117,14 @@ pub fn load_credentials(mut ctx: &mut gpgme::Context, path: &str) -> Vec<Credent
     let decrypted_string = decrypted.into_string().unwrap();
     let credentials: Vec<Credential> = json::decode(&decrypted_string).unwrap();
     credentials
+}
+
+pub fn gen_random_password() -> String {
+    let random_string: String = rand::thread_rng()
+    .gen_ascii_chars()
+    .take(12)
+    .collect();
+    random_string
 }
 
 #[cfg(test)]
