@@ -5,35 +5,19 @@ extern crate gpgme;
 extern crate getopts;
 extern crate rustc_serialize;
 
+mod vault;
+
 use std::env;
 use std::io;
-use std::fs::File;
 use std::io::prelude::*;
 use std::process::exit;
-use std::path::Path;
 
 use getopts::Options;
 use getopts::Matches;
 use gpgme::Data;
-use gpgme::ops;
 use rustc_serialize::json;
 
-#[derive(RustcDecodable, RustcEncodable)]
-pub struct UnPwCombo {
-    domain: String,
-    password: String,
-    username: String,
-}
-
-impl UnPwCombo {
-    fn new(domain: &str, username: &str, password: &str) -> UnPwCombo {
-        UnPwCombo {
-            domain: domain.to_string(),
-            username: username.to_string(),
-            password: password.to_string(),
-        }
-    }
-}
+use vault::Credential;
 
 fn print_usage(program: &str, opts: &Options) {
     let brief = format!("Usage: {} [options] FILENAME", program);
@@ -75,74 +59,6 @@ fn process_opts() -> Matches {
     return matches;
 }
 
-fn open_file_for_writing(path: &str) -> File {
-    return File::create(Path::new(path)).unwrap();
-}
-
-fn load_encrypted_file(path: &str) -> Data {
-    match Data::load(&path) {
-        Ok(input) => input,
-        Err(err) => {
-            writeln!(io::stderr(), "pwm: error reading '{}': {}", path, err);
-            exit(1);
-        }
-    }
-}
-
-fn decrypt_data(ctx: &mut gpgme::Context, input: &mut Data, decrypted: &mut Data) {
-    match ctx.decrypt(input, decrypted) {
-        Ok(_) => (),
-        Err(err) => {
-            writeln!(io::stderr(), "pwm: decrypting failed: {}", err);
-            exit(1);
-        }
-    }
-}
-
-pub fn find_key_in_unpwcombo_vec(vec: &Vec<UnPwCombo>, searchstr: &str) -> UnPwCombo {
-    for combo in vec {
-        if combo.domain == searchstr {
-            return UnPwCombo::new(&combo.domain, &combo.username, &combo.password);
-        }
-    }
-
-    writeln!(io::stderr(), "pwm: No such password");
-    exit(1);
-}
-
-fn save_updated_pw_file(vec: &Vec<UnPwCombo>,
-                        path: &str,
-                        ctx: &mut gpgme::Context,
-                        recipient: &str) {
-    let key = ctx.find_key(recipient).unwrap();
-
-    let mut encrypted = Data::new().unwrap();
-
-    ctx.set_armor(true);
-
-    let serialized_vector = json::encode(&vec).unwrap();
-
-    let output = serialized_vector.into_bytes();
-    let mut output_data = Data::from_bytes(&output).unwrap();
-
-    match ctx.encrypt(Some(&key),
-                      ops::EncryptFlags::empty(),
-                      &mut output_data,
-                      &mut encrypted) {
-        Ok(..) => (),
-        Err(err) => {
-            writeln!(io::stderr(), "encrypting failed: {}", err);
-            exit(1);
-        }
-    }
-
-    let encrypted_string = encrypted.into_string().unwrap();
-
-    let mut f = open_file_for_writing(&path);
-
-    f.write_all(&format!("{}", &encrypted_string).into_bytes());
-}
-
 fn main() {
     // Process params
     let opts = process_opts();
@@ -156,29 +72,35 @@ fn main() {
     // Run first time init
     if opts.opt_present("i") {
         let recipient = opts.opt_str("r").unwrap();
-        let combos = Vec::new();
-        save_updated_pw_file(&combos, &path, &mut ctx, &recipient);
+        let empty_credentials = Vec::new();
+        vault::save_updated_pw_file(&empty_credentials, &path, &mut ctx, &recipient);
         println!("Password Store Initialized");
         exit(0);
     }
 
     // Load
-    let mut input = load_encrypted_file(&path);
+    let mut input = vault::load_encrypted_file(&path);
     let mut decrypted = Data::new().unwrap();
 
     // Decrypt & Get JSON
-    decrypt_data(&mut ctx, &mut input, &mut decrypted);
+    vault::decrypt_data(&mut ctx, &mut input, &mut decrypted);
     let decrypted_string = decrypted.into_string().unwrap();
-    let mut combos: Vec<UnPwCombo> = json::decode(&decrypted_string).unwrap();
+    let mut credentials: Vec<Credential> = json::decode(&decrypted_string).unwrap();
 
     // If requested, find matching password for a given key
     if opts.opt_present("f") {
-        let combo = find_key_in_unpwcombo_vec(&combos, &opts.opt_str("f").unwrap());
-
+        let credential = match vault::find_domain_in_credential_vec(&credentials, &opts.opt_str("f").unwrap()) {
+            Some(credential) => credential,
+            _ => { 
+                writeln!(io::stderr(), "pwm: No such credential found");
+                exit(1);
+            }
+        };
+            
         if opts.opt_present("b") {
-            println!("{}:{}", &combo.username, &combo.password)
+            println!("{}:{}", &credential.username, &credential.password);
         } else {
-            println!("{}", &combo.password);
+            println!("{}", &credential.password);
         }
     }
 
@@ -192,36 +114,12 @@ fn main() {
             un = opts.opt_str("u").unwrap();
         }
 
-        let combo = UnPwCombo::new(&domain, &un, &pw);
+        let credential = Credential::new(&domain, &un, &pw);
         let recipient = opts.opt_str("r").unwrap();
 
-        combos.push(combo);
-        save_updated_pw_file(&combos, &path, &mut ctx, &recipient);
-        println!("Password Stored");
+        credentials.push(credential);
+        vault::save_updated_pw_file(&credentials, &path, &mut ctx, &recipient);
+        println!("Credential Stored");
         exit(0);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn needle_in_haystack() {
-        let tuples = [("domain.comisthis", "notthisdomain"),
-                      ("uisce.ie", "iamapassword"),
-                      ("domain.com", "domain!"),
-                      ("whatsapassword.io", "omg")];
-
-        let searchdomain = "domain.com";
-        let correctanswer = "domain!";
-        let username = "Thor";
-
-        let mut combos: Vec<UnPwCombo> = Vec::new();
-        for combo in tuples.iter() {
-            combos.push(UnPwCombo::new(combo.0, username, combo.1));
-        }
-
-        assert_eq!(find_key_in_unpwcombo_vec(&combos, searchdomain).password,
-                   correctanswer);
     }
 }
