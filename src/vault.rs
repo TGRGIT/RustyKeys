@@ -13,38 +13,41 @@ use gpgme::ops;
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct Credential {
-	pub domain: String,
-	pub password: String,
-	pub username: String,
+    pub domain: String,
+    pub password: String,
+    pub username: String,
 }
 
 impl Credential {
-	pub fn new(domain: &str, username: &str, password: &str) -> Credential {
-		Credential {
-			domain: domain.to_string(),
-			username: username.to_string(),
-			password: password.to_string(),
-		}
-	}
-}
-
-pub fn find_domain_in_credential_vec(vec: &Vec<Credential>, searchstr: &str) -> Option<Credential> {
-    for credential in vec {
-        if credential.domain == searchstr {
-            return Some(Credential::new(&credential.domain, &credential.username, &credential.password));
+    pub fn new(domain: &str, username: &str, password: &str) -> Credential {
+        Credential {
+            domain: domain.to_string(),
+            username: username.to_string(),
+            password: password.to_string(),
         }
     }
-	None
 }
+
 
 fn open_file_for_writing(path: &str) -> File {
     return File::create(Path::new(path)).unwrap();
 }
 
+pub fn find_domain_in_credential_vec(vec: &Vec<Credential>, searchstr: &str) -> Option<Credential> {
+    for credential in vec {
+        if credential.domain == searchstr {
+            return Some(Credential::new(&credential.domain,
+                                        &credential.username,
+                                        &credential.password));
+        }
+    }
+    None
+}
+
 pub fn save_updated_pw_file(vec: &Vec<Credential>,
-                        path: &str,
-                        ctx: &mut gpgme::Context,
-                        recipient: &str) {
+                            path: &str,
+                            ctx: &mut gpgme::Context,
+                            recipient: &str) {
     let key = ctx.find_key(recipient).unwrap();
 
     let mut encrypted = Data::new().unwrap();
@@ -93,6 +96,24 @@ pub fn decrypt_data(ctx: &mut gpgme::Context, input: &mut Data, decrypted: &mut 
             exit(1);
         }
     }
+}
+
+pub fn spawn_gpgme_context() -> gpgme::Context {
+    let proto = gpgme::PROTOCOL_OPENPGP;
+    let mut ctx = gpgme::create_context().unwrap();
+    ctx.set_protocol(proto).unwrap();
+    ctx
+}
+
+pub fn load_credentials(mut ctx: &mut gpgme::Context, path: &str) -> Vec<Credential> {
+    let mut input = load_encrypted_file(&path);
+    let mut decrypted = Data::new().unwrap();
+
+    // Decrypt & Get JSON
+    decrypt_data(&mut ctx, &mut input, &mut decrypted);
+    let decrypted_string = decrypted.into_string().unwrap();
+    let credentials: Vec<Credential> = json::decode(&decrypted_string).unwrap();
+    credentials
 }
 
 #[cfg(test)]

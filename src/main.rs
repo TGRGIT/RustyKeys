@@ -14,8 +14,6 @@ use std::process::exit;
 
 use getopts::Options;
 use getopts::Matches;
-use gpgme::Data;
-use rustc_serialize::json;
 
 use vault::Credential;
 
@@ -65,9 +63,7 @@ fn main() {
 
     // Let's setup some stuff
     let path = opts.opt_str("l").unwrap();
-    let proto = gpgme::PROTOCOL_OPENPGP;
-    let mut ctx = gpgme::create_context().unwrap();
-    ctx.set_protocol(proto).unwrap();
+    let mut ctx = vault::spawn_gpgme_context();
 
     // Run first time init
     if opts.opt_present("i") {
@@ -79,24 +75,19 @@ fn main() {
     }
 
     // Load
-    let mut input = vault::load_encrypted_file(&path);
-    let mut decrypted = Data::new().unwrap();
-
-    // Decrypt & Get JSON
-    vault::decrypt_data(&mut ctx, &mut input, &mut decrypted);
-    let decrypted_string = decrypted.into_string().unwrap();
-    let mut credentials: Vec<Credential> = json::decode(&decrypted_string).unwrap();
+    let mut credentials = vault::load_credentials(&mut ctx, &path);
 
     // If requested, find matching password for a given key
     if opts.opt_present("f") {
-        let credential = match vault::find_domain_in_credential_vec(&credentials, &opts.opt_str("f").unwrap()) {
+        let credential = match vault::find_domain_in_credential_vec(&credentials,
+                                                                    &opts.opt_str("f").unwrap()) {
             Some(credential) => credential,
-            _ => { 
+            _ => {
                 writeln!(io::stderr(), "pwm: No such credential found");
                 exit(1);
             }
         };
-            
+
         if opts.opt_present("b") {
             println!("{}:{}", &credential.username, &credential.password);
         } else {
